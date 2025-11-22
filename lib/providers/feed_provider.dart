@@ -130,4 +130,22 @@ class FeedProvider extends ChangeNotifier {
       rethrow;
     }
   }
+
+  /// Supprime un défi
+  Future<void> deleteChallenge(String challengeId) async {
+    try {
+      // 1. Appel au SERVICE
+      await _challengeService.deleteChallenge(challengeId, _authProvider.currentUserId);
+
+      // 2. Mise à jour locale : on retire le défi de la liste
+      _feed.removeWhere((c) => c.id == challengeId);
+
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) {
+        print("Erreur deleteChallenge: $e");
+      }
+      rethrow;
+    }
+  }
 }

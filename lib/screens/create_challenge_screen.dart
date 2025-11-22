@@ -3,10 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go4it/providers/feed_provider.dart';
 import 'package:go4it/utils/app_styles.dart';
-import 'package:characters/characters.dart'; // Import pour gérer les émojis complexes
+import 'package:characters/characters.dart';
+// Import du modèle
+import 'package:go4it/models/challenge.dart';
 
 class CreateChallengeScreen extends StatefulWidget {
-  const CreateChallengeScreen({super.key});
+  // Paramètre optionnel : si fourni, on est en mode "Modification"
+  final Challenge? challengeToEdit;
+
+  const CreateChallengeScreen({super.key, this.challengeToEdit});
 
   @override
   State<CreateChallengeScreen> createState() => _CreateChallengeScreenState();
@@ -19,6 +24,23 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
   final _emojiController = TextEditingController();
 
   bool _isLoading = false;
+
+  // Getter pour savoir facilement si on édite
+  bool get _isEditing => widget.challengeToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Si on édite, on pré-remplit les champs !
+    if (_isEditing) {
+      final c = widget.challengeToEdit!;
+      _titleController.text = c.title;
+      _descController.text = c.description;
+      if (c.emoji != null) {
+        _emojiController.text = c.emoji!;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -34,17 +56,39 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await context.read<FeedProvider>().createChallenge(
-        _titleController.text.trim(),
-        _descController.text.trim(),
-        emoji: _emojiController.text.trim().isEmpty ? null : _emojiController.text.trim(),
-      );
+      final feedProvider = context.read<FeedProvider>();
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Défi créé avec succès ! 🚀')),
+      if (_isEditing) {
+        // --- MODE MODIFICATION ---
+        await feedProvider.updateChallenge(
+          challengeId: widget.challengeToEdit!.id, // On garde le même ID
+          title: _titleController.text.trim(),
+          description: _descController.text.trim(),
+          emoji: _emojiController.text.trim().isEmpty ? null : _emojiController.text.trim(),
+          // On garde l'image existante pour l'instant si on ne la change pas
+          imageUrl: widget.challengeToEdit!.imageUrl,
         );
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Défi mis à jour ! ✨')),
+          );
+        }
+      } else {
+        // --- MODE CRÉATION (Comme avant) ---
+        await feedProvider.createChallenge(
+          _titleController.text.trim(),
+          _descController.text.trim(),
+          emoji: _emojiController.text.trim().isEmpty ? null : _emojiController.text.trim(),
+        );
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Défi créé avec succès ! 🚀')),
+          );
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -74,12 +118,13 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Nouveau Défi',
+                      Text(
+                        // Titre dynamique
+                        _isEditing ? 'Modifier le Défi' : 'Nouveau Défi',
                         style: AppStyles.titleLarge,
                       ),
                       Text(
-                        'Lance-toi un challenge pour aujourd\'hui',
+                        _isEditing ? 'Corrige ou améliore ton défi' : 'Lance-toi un challenge pour aujourd\'hui',
                         style: TextStyle(fontSize: 13, color: AppStyles.textSecondary),
                       ),
                     ],
@@ -149,7 +194,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                   ),
                   const SizedBox(height: 30),
 
-                  // Bouton Valider
+                  // Bouton Valider Dynamique
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
@@ -157,12 +202,15 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                       style: AppStyles.primaryButtonStyle,
                       child: _isLoading
                           ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Row(
+                          : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.rocket_launch_outlined),
-                          SizedBox(width: 8),
-                          Text('LANCER LE DÉFI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          Icon(_isEditing ? Icons.save_outlined : Icons.rocket_launch_outlined),
+                          const SizedBox(width: 8),
+                          Text(
+                              _isEditing ? 'SAUVEGARDER' : 'LANCER LE DÉFI',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                          ),
                         ],
                       ),
                     ),
@@ -179,16 +227,11 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
   }
 }
 
-// --- FORMATTER PERSONNALISÉ POUR ÉMOJIS ---
-// Ce formatter s'assure qu'il n'y a qu'un seul émoji visuel,
-// même si cet émoji est composé de plusieurs caractères techniques.
+// (Conservez la classe _EmojiLimiter à la fin du fichier)
 class _EmojiLimiter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    // Utilise le package 'characters' pour compter les vrais caractères visuels
     if (newValue.text.characters.length > 1) {
-      // Si plus d'un émoji, on garde l'ancien ou on tronque
-      // Ici, on garde simplement le premier émoji tapé
       String firstChar = newValue.text.characters.first;
       return TextEditingValue(
         text: firstChar,

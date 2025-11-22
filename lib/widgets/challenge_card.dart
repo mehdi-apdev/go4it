@@ -4,7 +4,10 @@ import 'package:go4it/models/challenge.dart';
 import 'package:go4it/providers/feed_provider.dart';
 import 'package:go4it/providers/auth_provider.dart';
 import 'package:go4it/widgets/user_avatar_row.dart';
+import 'package:go4it/utils/app_styles.dart';
 import 'package:timeago/timeago.dart' as timeago;
+// Import de l'écran d'édition
+import 'package:go4it/screens/create_challenge_screen.dart';
 
 class ChallengeCard extends StatelessWidget {
   final Challenge challenge;
@@ -13,37 +16,35 @@ class ChallengeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // On récupère l'ID de l'utilisateur connecté
     final currentUserId = context.read<AuthProvider>().currentUserId;
+
+    // Est-ce MON défi ?
+    final isMyChallenge = challenge.userId == currentUserId;
+
     final isDoneByMe = challenge.dones.contains(currentUserId);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 0, // Minimaliste : pas d'ombre, ou très légère
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.grey.shade100), // Bordure subtile
-      ),
+      margin: AppStyles.cardMargin,
+      elevation: 0,
+      color: AppStyles.cardBackground,
+      shape: AppStyles.cardShape,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppStyles.cardPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- 1. Ligne du haut : Emoji + Textes + Checkbox ---
+            // --- Haut : Emoji + Contenu + Actions ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Emoji
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.05), // Plus léger
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  decoration: AppStyles.emojiBoxDecoration,
                   child: Text(
                     challenge.emoji ?? '🎯',
-                    style: const TextStyle(fontSize: 28),
+                    style: AppStyles.emojiText,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -53,23 +54,87 @@ class ChallengeCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        challenge.title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          decoration: isDoneByMe ? TextDecoration.lineThrough : null,
-                          color: isDoneByMe ? Colors.grey : Colors.black87,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Titre (Flexible pour éviter l'overflow si le menu est là)
+                          Flexible(
+                            child: Text(
+                              challenge.title,
+                              style: AppStyles.cardTitle.copyWith(
+                                decoration: isDoneByMe ? TextDecoration.lineThrough : null,
+                                color: isDoneByMe ? AppStyles.textLight : AppStyles.textPrimary,
+                              ),
+                            ),
+                          ),
+
+                          // --- MINI MENU (Seulement si c'est mon défi) ---
+                          if (isMyChallenge)
+                            SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: PopupMenuButton<String>(
+                                padding: EdgeInsets.zero,
+                                icon: Icon(Icons.more_horiz, color: AppStyles.textSecondary),
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    // Navigation vers l'écran de création EN MODE ÉDITION
+                                    // On passe le défi actuel en paramètre
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) => Padding(
+                                        padding: EdgeInsets.only(
+                                          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                                          left: 16, right: 16, top: 60,
+                                        ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: AppStyles.cardBackground,
+                                            borderRadius: BorderRadius.circular(24),
+                                          ),
+                                          clipBehavior: Clip.hardEdge,
+                                          // ON PASSE LE DÉFI ICI
+                                          child: CreateChallengeScreen(challengeToEdit: challenge),
+                                        ),
+                                      ),
+                                    );
+                                  } else if (value == 'delete') {
+                                    // À implémenter plus tard comme demandé
+                                    print("Suppression demandée pour ${challenge.id}");
+                                  }
+                                },
+                                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                                  const PopupMenuItem<String>(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit, size: 20),
+                                        SizedBox(width: 8),
+                                        Text('Modifier'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem<String>(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete, size: 20, color: Colors.red),
+                                        SizedBox(width: 8),
+                                        Text('Supprimer', style: TextStyle(color: Colors.red)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
                         challenge.description,
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 13,
-                          height: 1.4,
-                        ),
+                        style: AppStyles.cardDescription,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -77,57 +142,50 @@ class ChallengeCard extends StatelessWidget {
                   ),
                 ),
 
-                // Bouton Action
-                IconButton(
-                  onPressed: () {
-                    context.read<FeedProvider>().toggleDone(challenge.id);
-                  },
-                  icon: Icon(
-                    isDoneByMe ? Icons.check_circle : Icons.circle_outlined,
-                    color: isDoneByMe ? theme.colorScheme.secondary : Colors.grey[300],
-                    size: 32,
+                // Bouton Action (Check) - Seulement si ce n'est PAS mon défi (ou les deux ?)
+                // Généralement on peut liker son propre post, donc on le laisse.
+                // Si le menu gêne le bouton, on peut ajuster le layout.
+                if (!isMyChallenge) // Optionnel : cacher le bouton check si c'est à moi et que j'ai le menu
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0),
+                    child: IconButton(
+                      onPressed: () {
+                        context.read<FeedProvider>().toggleDone(challenge.id);
+                      },
+                      icon: Icon(
+                        isDoneByMe ? Icons.check_circle : Icons.circle_outlined,
+                        color: isDoneByMe ? AppStyles.secondary : AppStyles.textLight,
+                        size: 32,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
 
             const SizedBox(height: 16),
 
-            // --- 2. Ligne du bas : Avatar + Date + Likes ---
+            // --- Bas : Avatar + Date + Likes ---
+            // (Code inchangé pour le bas)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Groupe Gauche : Avatar + Date
                 Expanded(
                   child: Row(
                     children: [
-                      // Avatar et Nom
                       UserAvatarRow(userId: challenge.userId),
-
                       const SizedBox(width: 8),
-
-                      // Petit point séparateur
-                      Text("•", style: TextStyle(color: Colors.grey[400])),
-
+                      Text("•", style: TextStyle(color: AppStyles.textLight)),
                       const SizedBox(width: 8),
-
-                      // Date relative (Minimaliste)
                       Flexible(
                         child: Text(
                           timeago.format(challenge.createdAt, locale: 'fr'),
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                            // Pas d'italique pour le look minimaliste
-                          ),
+                          style: TextStyle(color: AppStyles.textLight, fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                 ),
-
-                // Groupe Droite : Compteur de likes (si > 0)
                 if (challenge.dones.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -137,15 +195,11 @@ class ChallengeCard extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.favorite, size: 12, color: Colors.red[400]),
+                        const Icon(Icons.favorite, size: 12, color: Colors.red),
                         const SizedBox(width: 4),
                         Text(
                           "${challenge.dones.length}",
-                          style: TextStyle(
-                              color: Colors.red[400],
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11
-                          ),
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11),
                         ),
                       ],
                     ),
