@@ -1,0 +1,36 @@
+name: go4it
+description: A new Flutter project for daily challenges.
+publish_to: 'none' # Remove this line if you want to publish to pub.dev
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+# --- DÉPENDANCES DE L'APPLICATION ---
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 1. Pour la gestion d'état (ChangeNotifierProvider, context.watch, etc.)
+  provider: ^6.1.2 # (Utilisez la dernière version)
+  # 2. Pour faire les appels HTTP (GET, POST) à notre API Express
+  http: ^1.2.1 # (Utilisez la dernière version)
+  timeago: ^3.6.1
+  # ------------------------------
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+flutter:
+
+  uses-material-design: true
+
+  assets:
+    - assets/
+
+
