@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go4it/providers/feed_provider.dart';
 import 'package:go4it/utils/app_status.dart';
-// Import de notre nouvelle carte
+import 'package:go4it/screens/create_challenge_screen.dart';
 import 'package:go4it/widgets/challenge_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -39,7 +39,41 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _buildBody(context, feedProvider, theme),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Future navigation vers la création
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent, // Le fond doit être transparent !
+            builder: (context) => Padding(
+              padding: EdgeInsets.only(
+                // Marges sur les côtés et en bas (plus l'espace du clavier si ouvert)
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                left: 16,
+                right: 16,
+                // Une petite marge en haut pour ne pas coller au status bar si la modale est grande
+                top: 60,
+              ),
+              child: Container(
+                // On limite la hauteur de la bulle (ex: 85% de l'écran max)
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24), // Coins bien arrondis partout
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                // Important : Clip pour que le contenu ne dépasse pas des coins arrondis
+                clipBehavior: Clip.hardEdge,
+                child: const CreateChallengeScreen(),
+              ),
+            ),
+          );
         },
         child: const Icon(Icons.add),
       ),
