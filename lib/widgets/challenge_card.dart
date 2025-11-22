@@ -14,6 +14,48 @@ class ChallengeCard extends StatelessWidget {
 
   const ChallengeCard({super.key, required this.challenge});
 
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer le défi ?'),
+        content: const Text('Cette action est irréversible.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(), // Fermer
+            child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () async {
+              // 1. Fermer la boite de dialogue
+              Navigator.of(ctx).pop();
+
+              try {
+                // 2. Appeler le Provider pour supprimer
+                await context.read<FeedProvider>().deleteChallenge(challenge.id);
+
+                // 3. Afficher un feedback
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Défi supprimé 🗑️')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // On récupère l'ID de l'utilisateur connecté
@@ -69,17 +111,17 @@ class ChallengeCard extends StatelessWidget {
                           ),
 
                           // --- MINI MENU (Seulement si c'est mon défi) ---
+                          // --- MINI MENU (Seulement si c'est mon défi) ---
                           if (isMyChallenge)
                             SizedBox(
                               height: 24,
                               width: 24,
                               child: PopupMenuButton<String>(
                                 padding: EdgeInsets.zero,
-                                icon: Icon(Icons.more_horiz, color: AppStyles.textSecondary),
+                                icon: const Icon(Icons.more_horiz, color: Colors.grey), // Icone grise
                                 onSelected: (value) {
                                   if (value == 'edit') {
-                                    // Navigation vers l'écran de création EN MODE ÉDITION
-                                    // On passe le défi actuel en paramètre
+                                    // ... (Code d'édition inchangé) ...
                                     showModalBottomSheet(
                                       context: context,
                                       isScrollControlled: true,
@@ -91,18 +133,16 @@ class ChallengeCard extends StatelessWidget {
                                         ),
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: AppStyles.cardBackground,
+                                            color: Colors.white, // AppStyles.cardBackground
                                             borderRadius: BorderRadius.circular(24),
                                           ),
                                           clipBehavior: Clip.hardEdge,
-                                          // ON PASSE LE DÉFI ICI
                                           child: CreateChallengeScreen(challengeToEdit: challenge),
                                         ),
                                       ),
                                     );
                                   } else if (value == 'delete') {
-                                    // À implémenter plus tard comme demandé
-                                    print("Suppression demandée pour ${challenge.id}");
+                                    _confirmDelete(context);
                                   }
                                 },
                                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
