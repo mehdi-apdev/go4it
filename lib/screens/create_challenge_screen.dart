@@ -1,10 +1,12 @@
+import 'dart:io'; // Pour File
+import 'dart:convert'; // Pour base64Encode
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go4it/providers/feed_provider.dart';
 import 'package:go4it/utils/app_styles.dart';
 import 'package:characters/characters.dart';
-// Import du modèle
 import 'package:go4it/models/challenge.dart';
 
 class CreateChallengeScreen extends StatefulWidget {
@@ -22,6 +24,9 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _emojiController = TextEditingController();
+  File? _selectedImageFile; // L'image sélectionnée sur le téléphone
+  String? _existingImageUrl; // L'URL de l'image existante (en cas d'édition)
+  final ImagePicker _picker = ImagePicker();
 
   bool _isLoading = false;
 
@@ -39,6 +44,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
       if (c.emoji != null) {
         _emojiController.text = c.emoji!;
       }
+      _existingImageUrl = c.imageUrl;
     }
   }
 
@@ -50,6 +56,43 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
     super.dispose();
   }
 
+  // --- MÉTHODE POUR CHOISIR UNE IMAGE ---
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 800, // On réduit la taille pour ne pas exploser le base64
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImageFile = File(pickedFile.path);
+          // Si on choisit une nouvelle image, on oublie l'ancienne URL
+          _existingImageUrl = null;
+        });
+      }
+    } catch (e) {
+      print("Erreur image: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de charger l\'image')),
+      );
+    }
+  }
+
+  // --- CONVERSION EN BASE64 ---
+  Future<String?> _imageToBase64() async {
+    if (_selectedImageFile == null) return null;
+    try {
+      final bytes = await _selectedImageFile!.readAsBytes();
+      // On ajoute le préfixe pour que le serveur sache que c'est une image
+      return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    } catch (e) {
+      print("Erreur encodage: $e");
+      return null;
+    }
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -58,15 +101,19 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
     try {
       final feedProvider = context.read<FeedProvider>();
 
+      // On prépare l'image (soit la nouvelle en base64, soit l'ancienne URL)
+      String? finalImageUrl = _existingImageUrl;
+      if (_selectedImageFile != null) {
+        finalImageUrl = await _imageToBase64();
+      }
+
       if (_isEditing) {
-        // --- MODE MODIFICATION ---
         await feedProvider.updateChallenge(
-          challengeId: widget.challengeToEdit!.id, // On garde le même ID
+          challengeId: widget.challengeToEdit!.id,
           title: _titleController.text.trim(),
           description: _descController.text.trim(),
           emoji: _emojiController.text.trim().isEmpty ? null : _emojiController.text.trim(),
-          // On garde l'image existante pour l'instant si on ne la change pas
-          imageUrl: widget.challengeToEdit!.imageUrl,
+          imageUrl: finalImageUrl, // On envoie l'image
         );
 
         if (mounted) {
@@ -76,11 +123,11 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
           );
         }
       } else {
-        // --- MODE CRÉATION (Comme avant) ---
         await feedProvider.createChallenge(
           _titleController.text.trim(),
           _descController.text.trim(),
           emoji: _emojiController.text.trim().isEmpty ? null : _emojiController.text.trim(),
+          imageUrl: finalImageUrl, // On envoie l'image
         );
 
         if (mounted) {
@@ -98,6 +145,76 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  // --- WIDGET POUR AFFICHER L'IMAGE SÉLECTIONNÉE ---
+  Widget _buildImagePreview() {
+    if (_selectedImageFile != null) {
+      // Cas 1 : Nouvelle image locale
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.file(_selectedImageFile!, height: 150, width: double.infinity, fit: BoxFit.cover),
+      );
+    } else if (_existingImageUrl != null) {
+      // Cas 2 : Image existante (URL ou Base64)
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: _existingImageUrl!.startsWith('data:')
+            ? Image.memory(
+            base64Decode(_existingImageUrl!.split(',')[1]),
+            height: 150, width: double.infinity, fit: BoxFit.cover
+        )
+            : Image.network(_existingImageUrl!, height: 150, width: double.infinity, fit: BoxFit.cover),
+      );
+    } else {
+      // Cas 3 : Pas d'image
+      return Container(
+        height: 100,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_a_photo, color: Colors.grey[400], size: 32),
+            const SizedBox(height: 8),
+            Text("Ajouter une photo", style: TextStyle(color: Colors.grey[500])),
+          ],
+        ),
+      );
+    }
+  }
+
+  // --- BOITE DE DIALOGUE POUR CHOISIR LA SOURCE ---
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galerie'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Caméra'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _pickImage(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -193,6 +310,13 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                     ),
                   ),
                   const SizedBox(height: 30),
+
+                  // --- ZONE IMAGE ---
+                  GestureDetector(
+                    onTap: _showImageSourceDialog,
+                    child: _buildImagePreview(),
+                  ),
+                  const SizedBox(height: 20),
 
                   // Bouton Valider Dynamique
                   SizedBox(

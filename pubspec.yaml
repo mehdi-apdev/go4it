@@ -11,11 +11,12 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # 1. Pour la gestion d'état (ChangeNotifierProvider, context.watch, etc.)
+  # Pour la gestion d'état (ChangeNotifierProvider, context.watch, etc.)
   provider: ^6.1.2 # (Utilisez la dernière version)
-  # 2. Pour faire les appels HTTP (GET, POST) à notre API Express
+  # Pour faire les appels HTTP (GET, POST) à notre API Express
   http: ^1.2.1 # (Utilisez la dernière version)
   timeago: ^3.6.1
+  image_picker: ^1.0.7 # Pour la sélection d'images
   # ------------------------------
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1

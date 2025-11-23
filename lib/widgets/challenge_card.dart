@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go4it/models/challenge.dart';
@@ -6,7 +7,6 @@ import 'package:go4it/providers/auth_provider.dart';
 import 'package:go4it/widgets/user_avatar_row.dart';
 import 'package:go4it/utils/app_styles.dart';
 import 'package:timeago/timeago.dart' as timeago;
-// Import de l'écran d'édition
 import 'package:go4it/screens/create_challenge_screen.dart';
 
 class ChallengeCard extends StatelessWidget {
@@ -60,28 +60,63 @@ class ChallengeCard extends StatelessWidget {
   }
 
   @override
+// --- Widget utilitaire pour afficher l'image (URL ou Base64) ---
+  Widget _buildChallengeImage() {
+    if (challenge.imageUrl == null) return const SizedBox.shrink();
+
+    ImageProvider imageProvider;
+
+    if (challenge.imageUrl!.startsWith('data:')) {
+      // C'est du Base64
+      try {
+        // On retire le préfixe "data:image/jpeg;base64," pour décoder
+        final base64String = challenge.imageUrl!.split(',')[1];
+        imageProvider = MemoryImage(base64Decode(base64String));
+      } catch (e) {
+        return const SizedBox.shrink(); // Erreur de décodage
+      }
+    } else {
+      // C'est une URL normale
+      imageProvider = NetworkImage(challenge.imageUrl!);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image(
+          image: imageProvider,
+          width: double.infinity,
+          height: 200, // Hauteur fixe pour l'uniformité
+          fit: BoxFit.cover,
+          errorBuilder: (ctx, err, stack) => Container(
+            height: 200,
+            color: Colors.grey[200],
+            child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currentUserId = context.read<AuthProvider>().currentUserId;
     final isMyChallenge = challenge.userId == currentUserId;
 
-    // Le contenu visuel de la carte (extrait pour être réutilisé)
     Widget cardContent = _buildCardContent(context, isMyChallenge);
 
-    // Si ce n'est pas mon défi, on affiche juste la carte sans swipe
     if (!isMyChallenge) {
       return cardContent;
     }
 
-    // Si c'est mon défi, on ajoute les gestures de Swipe
     return Dismissible(
-      key: Key(challenge.id), // Clé unique indispensable
-
-      // --- 1. Swipe vers la DROITE (Modifier) ---
+      key: Key(challenge.id),
       background: Container(
         margin: AppStyles.cardMargin,
         padding: const EdgeInsets.only(left: 20),
         decoration: BoxDecoration(
-          color: AppStyles.primary, // Bleu
+          color: AppStyles.primary,
           borderRadius: BorderRadius.circular(AppStyles.cardRadiusValue),
         ),
         alignment: Alignment.centerLeft,
@@ -93,13 +128,11 @@ class ChallengeCard extends StatelessWidget {
           ],
         ),
       ),
-
-      // --- 2. Swipe vers la GAUCHE (Supprimer) ---
       secondaryBackground: Container(
         margin: AppStyles.cardMargin,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: Colors.red[400], // Rouge
+          color: Colors.red[400],
           borderRadius: BorderRadius.circular(AppStyles.cardRadiusValue),
         ),
         alignment: Alignment.centerRight,
@@ -112,37 +145,26 @@ class ChallengeCard extends StatelessWidget {
           ],
         ),
       ),
-
-      // --- 3. Logique de confirmation ---
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          // ---> Swipe vers la Droite (Modifier)
           _editChallenge(context);
-          return false; // On retourne false pour que la carte revienne à sa place (ne disparaisse pas)
+          return false;
         } else {
-          // <--- Swipe vers la Gauche (Supprimer)
-          final bool confirm = await _confirmDelete(context);
-          return confirm; // Si true, l'animation de suppression continue
+          return await _confirmDelete(context);
         }
       },
-
-      // --- 4. Action finale (Une fois l'animation finie) ---
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
-          // On appelle le provider pour supprimer la donnée
           context.read<FeedProvider>().deleteChallenge(challenge.id);
-
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Défi supprimé 🗑️')),
           );
         }
       },
-
       child: cardContent,
     );
   }
 
-  // Le design de la carte elle-même
   Widget _buildCardContent(BuildContext context, bool isMyChallenge) {
     final theme = Theme.of(context);
     final currentUserId = context.read<AuthProvider>().currentUserId;
@@ -158,11 +180,9 @@ class ChallengeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Haut : Emoji + Contenu + Actions ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Emoji
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: AppStyles.emojiBoxDecoration,
@@ -172,8 +192,6 @@ class ChallengeCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-
-                // Titre et Description
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,25 +213,29 @@ class ChallengeCard extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // Bouton Action (Check)
-                // Note: On a retiré le menu "..." ici car il est remplacé par le swipe
-                IconButton(
-                  onPressed: () {
-                    context.read<FeedProvider>().toggleDone(challenge.id);
-                  },
-                  icon: Icon(
-                    isDoneByMe ? Icons.check_circle : Icons.circle_outlined,
-                    color: isDoneByMe ? AppStyles.secondary : AppStyles.textLight,
-                    size: 32,
+                if (!isMyChallenge)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0),
+                    child: IconButton(
+                      onPressed: () {
+                        context.read<FeedProvider>().toggleDone(challenge.id);
+                      },
+                      icon: Icon(
+                        isDoneByMe ? Icons.check_circle : Icons.circle_outlined,
+                        color: isDoneByMe ? AppStyles.secondary : AppStyles.textLight,
+                        size: 32,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
 
+            // --- AJOUT DE L'IMAGE ICI ---
+            _buildChallengeImage(),
+            // ---------------------------
+
             const SizedBox(height: 16),
 
-            // --- Bas : Avatar + Date + Likes ---
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
